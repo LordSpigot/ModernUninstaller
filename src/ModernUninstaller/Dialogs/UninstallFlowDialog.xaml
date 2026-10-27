@@ -1,0 +1,84 @@
+﻿<local:DialogWindow x:Class="ModernUninstaller.Dialogs.UninstallFlowDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ModernUninstaller"
+        Title="Deinstallation" Width="860" Height="620">
+    <Grid Margin="32,0,32,26">
+        <!-- Phase 1: läuft -->
+        <StackPanel x:Name="BusyPanel" VerticalAlignment="Center">
+            <TextBlock x:Name="BusyTitle" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+            <TextBlock x:Name="BusyStep" Style="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,10,0,22" TextAlignment="Center"/>
+            <ProgressBar x:Name="Bar" IsIndeterminate="False" Minimum="0" Maximum="100" Width="420"/>
+            <TextBlock Text="Bitte die Dialoge des Original-Uninstallers beantworten, falls sie erscheinen." Style="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,22,0,0"/>
+            <Button Style="{StaticResource SecondaryButton}" Content="Abbrechen" Width="160" HorizontalAlignment="Center" Margin="0,26,0,0" Click="CancelRun_Click"/>
+        </StackPanel>
+
+        <!-- Phase 2: Reste -->
+        <Grid x:Name="ResultPanel" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="ResultTitle" FontSize="20" FontWeight="SemiBold"/>
+            <TextBlock x:Name="ResultHint" Grid.Row="1" Style="{StaticResource Dim}" Margin="0,6,0,14"/>
+            <ListBox x:Name="ResultList" Grid.Row="2" Foreground="{DynamicResource Text}" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="bd" Background="{DynamicResource Card}" CornerRadius="10" Margin="0,0,0,6" Padding="12,9">
+                                        <ContentPresenter/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource CardHover}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="30"/>
+                                <ColumnDefinition Width="92"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}" VerticalAlignment="Center"/>
+                            <Border Grid.Column="1" CornerRadius="9" Background="{DynamicResource AccentSoft}" Padding="8,2" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Category}" FontSize="11" Foreground="{DynamicResource Accent}"/>
+                            </Border>
+                            <TextBlock Grid.Column="2" Text="{Binding Display}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Display}" VerticalAlignment="Center"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <Grid Grid.Row="3" Margin="0,16,0,0">
+                <CheckBox x:Name="AllCheck" Content="Alle auswählen" IsChecked="True" HorizontalAlignment="Left" VerticalAlignment="Center" Click="AllCheck_Click"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource SecondaryButton}" Content="Überspringen" Width="150" Margin="0,0,12,0" Click="Skip_Click"/>
+                    <Button x:Name="DeleteBtn" Style="{StaticResource PrimaryButton}" Content="Löschen" Width="150" Click="Delete_Click"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <!-- Phase 3: fertig -->
+        <StackPanel x:Name="DonePanel" Visibility="Collapsed" VerticalAlignment="Center">
+            <Border Width="84" Height="84" CornerRadius="42" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource Accent}" BorderThickness="2">
+                <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="34" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <TextBlock x:Name="DoneTitle" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,22,0,0"/>
+            <TextBlock x:Name="DoneText" Style="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,10,0,0" TextAlignment="Center" MaxWidth="700"/>
+            <Button Style="{StaticResource PrimaryButton}" Content="Fertig" Width="170" HorizontalAlignment="Center" Margin="0,28,0,0" Click="Done_Click"/>
+        </StackPanel>
+    </Grid>
+</local:DialogWindow>
+
+
+

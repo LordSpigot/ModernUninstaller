@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>ModernUninstaller</AssemblyName>
+    <RootNamespace>ModernUninstaller</RootNamespace>
+    <Version>0.2.0</Version>
+    <ApplicationIcon>Assets\ModernUninstaller.ico</ApplicationIcon>
+    <SatelliteResourceLanguages>de;en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\ModernUninstaller.png" />
+    <Resource Include="Assets\ModernUninstaller.ico" />
+  </ItemGroup>
+
+</Project>

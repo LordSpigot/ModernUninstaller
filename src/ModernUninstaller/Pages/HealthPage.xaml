@@ -1,0 +1,99 @@
+﻿<UserControl x:Class="ModernUninstaller.Pages.HealthPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <TextBlock Text="Software-Check" FontSize="24" FontWeight="SemiBold" Margin="4,6,0,0"/>
+
+        <Border Grid.Row="1" Margin="0,16,0,0" Background="{DynamicResource Surface}" CornerRadius="22" Padding="20">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="320"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Checks -->
+                <ItemsControl x:Name="Checks">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{DynamicResource Card}" CornerRadius="12" Padding="16,12" Margin="0,0,8,8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="34"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding Sub}" Style="{StaticResource Dim}" FontSize="12" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Ergebnisse -->
+                <Grid x:Name="ResultGrid" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="ResultTitle" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                    <ListBox x:Name="ResultList" Grid.Row="1" Foreground="{DynamicResource Text}" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border Background="{DynamicResource Card}" CornerRadius="10" Margin="0,0,0,6" Padding="12,9">
+                                                <ContentPresenter/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="30"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Display}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Display}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+
+                <!-- Rechts -->
+                <Grid Grid.Column="1" Margin="28,0,0,0">
+                    <StackPanel VerticalAlignment="Top" Margin="0,40,0,0">
+                        <Border Width="104" Height="104" CornerRadius="52" BorderThickness="2" BorderBrush="{DynamicResource Accent}" Background="{DynamicResource AccentSoft}">
+                            <TextBlock Text="&#xE9D9;" FontFamily="{StaticResource IconFont}" FontSize="40" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock x:Name="StatusText" FontSize="19" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" Margin="0,22,0,0" Text="Nie gescannt"/>
+                        <Border Background="{DynamicResource Card}" CornerRadius="14" Padding="16" Margin="0,26,0,0">
+                            <StackPanel>
+                                <TextBlock x:Name="HintTitle" Text="Jetzt scannen" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                                <Border Height="1" Background="{DynamicResource Border}" Margin="0,0,0,10"/>
+                                <TextBlock x:Name="HintText" Style="{StaticResource Dim}" Text="Findet defekte Uninstall-Einträge, alte Installationsdateien und temporäre Dateien. Es wird nichts gelöscht, bevor Sie die Liste bestätigt haben."/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel VerticalAlignment="Bottom" Margin="12,0,0,0">
+                        <Button x:Name="BackBtn" Style="{StaticResource SecondaryButton}" Content="Zurück" Visibility="Collapsed" Margin="0,0,0,10" Click="Back_Click"/>
+                        <Button x:Name="ActionBtn" Style="{StaticResource PrimaryButton}" Content="Scannen" FontSize="15" Padding="28,14" Click="Action_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
+

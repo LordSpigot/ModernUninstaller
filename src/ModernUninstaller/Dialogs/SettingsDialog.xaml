@@ -1,0 +1,77 @@
+<local:DialogWindow x:Class="ModernUninstaller.Dialogs.SettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ModernUninstaller"
+        Title="Einstellungen" Width="860" Height="600">
+    <Grid Margin="24,0,28,24">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="210"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Margin="0,4,18,0">
+            <RadioButton x:Name="TabUi" Style="{StaticResource SideTab}" Content="Bedienoberfläche" GroupName="s" IsChecked="True" Checked="Tab_Checked"/>
+            <RadioButton x:Name="TabGeneral" Style="{StaticResource SideTab}" Content="Allgemein" GroupName="s" Checked="Tab_Checked"/>
+            <RadioButton x:Name="TabUninstall" Style="{StaticResource SideTab}" Content="Deinstallation" GroupName="s" Checked="Tab_Checked"/>
+        </StackPanel>
+
+        <Border Grid.Column="1" Background="{DynamicResource Card}" CornerRadius="16" Padding="26,22">
+            <Grid>
+                <!-- Bedienoberfläche -->
+                <StackPanel x:Name="PanelUi">
+                    <TextBlock Text="Bedienoberfläche" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="Aussehen" Style="{StaticResource Dim}" Margin="0,6,0,8"/>
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton x:Name="ThemeDark" Style="{StaticResource SideTab}" Content="Dunkel" GroupName="t" Margin="0,0,10,0" MinWidth="110"/>
+                        <RadioButton x:Name="ThemeLight" Style="{StaticResource SideTab}" Content="Hell" GroupName="t" Margin="0,0,10,0" MinWidth="110"/>
+                        <RadioButton x:Name="ThemeSystem" Style="{StaticResource SideTab}" Content="System" GroupName="t" MinWidth="110"/>
+                    </StackPanel>
+                    <TextBlock Text="Schriftgröße" Style="{StaticResource Dim}" Margin="0,18,0,8"/>
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton x:Name="FontS" Style="{StaticResource SideTab}" GroupName="f" Margin="0,0,10,0" MinWidth="70"><TextBlock Text="Aa" FontSize="12" HorizontalAlignment="Center"/></RadioButton>
+                        <RadioButton x:Name="FontM" Style="{StaticResource SideTab}" GroupName="f" Margin="0,0,10,0" MinWidth="70"><TextBlock Text="Aa" FontSize="14" HorizontalAlignment="Center"/></RadioButton>
+                        <RadioButton x:Name="FontL" Style="{StaticResource SideTab}" GroupName="f" MinWidth="70"><TextBlock Text="Aa" FontSize="17" HorizontalAlignment="Center"/></RadioButton>
+                    </StackPanel>
+                    <TextBlock Text="Sprache" Style="{StaticResource Dim}" Margin="0,18,0,8"/>
+                    <ComboBox x:Name="LangBox" HorizontalAlignment="Left" Width="240" SelectedIndex="0">
+                        <ComboBoxItem Content="Deutsch"/>
+                    </ComboBox>
+                    <TextBlock Text="Weitere Sprachen folgen." Style="{StaticResource Dim}" FontSize="12" Margin="0,6,0,0"/>
+                </StackPanel>
+
+                <!-- Allgemein -->
+                <StackPanel x:Name="PanelGeneral" Visibility="Collapsed">
+                    <TextBlock Text="Allgemein" Style="{StaticResource SectionTitle}"/>
+                    <CheckBox x:Name="ShowRuntime" Content="Zeige System-Laufzeitkomponenten (.NET, VC++ Redistributable, XNA)" Margin="0,6,0,18"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                        <TextBlock Text="Selten genutzte Programme: nicht genutzt seit" VerticalAlignment="Center" Width="330"/>
+                        <ComboBox x:Name="MonthsBox" MinWidth="150"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Übergroße Programme: größer als" VerticalAlignment="Center" Width="330"/>
+                        <ComboBox x:Name="SizeBox" MinWidth="150"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Deinstallation -->
+                <StackPanel x:Name="PanelUninstall" Visibility="Collapsed">
+                    <TextBlock Text="Deinstallation" Style="{StaticResource SectionTitle}"/>
+                    <CheckBox x:Name="RestoreCheck" Content="Vor der Deinstallation einen Wiederherstellungspunkt erstellen" Margin="0,6,0,14"/>
+                    <CheckBox x:Name="QuickCheck" Content="Schnelldeinstallation: Rückfragen des Original-Uninstallers automatisch bestätigen" Margin="0,0,0,2"/>
+                    <TextBlock Text="Klickt Schaltflächen wie „Ja“, „Weiter“ oder „Deinstallieren“ im Original-Uninstaller. Funktioniert nur, wenn beide Programme mit gleichen Rechten laufen." Style="{StaticResource Dim}" FontSize="12" Margin="28,0,0,14"/>
+                    <CheckBox x:Name="AutoCheck" Content="Dateireste automatisch entfernen (ohne Auswahlliste)" Margin="0,0,0,14"/>
+                    <CheckBox x:Name="RecycleCheck" Content="Dateireste in den Papierkorb verschieben" Margin="0,0,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Style="{StaticResource SecondaryButton}" Content="Abbrechen" Width="150" Margin="0,0,12,0" Click="Cancel_Click"/>
+            <Button Style="{StaticResource PrimaryButton}" Content="Okay" Width="150" Click="Ok_Click"/>
+        </StackPanel>
+    </Grid>
+</local:DialogWindow>

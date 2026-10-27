@@ -1,0 +1,151 @@
+<local:DialogWindow x:Class="ModernUninstaller.Dialogs.MonitorDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ModernUninstaller"
+        Title="Installations-Monitor" Width="900" Height="680">
+    <Grid Margin="28,0,28,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Text="Installations-Monitor" FontSize="20" FontWeight="SemiBold"/>
+            <TextBlock Style="{StaticResource Dim}" Margin="0,6,0,14"
+                       Text="Vergleicht den Rechner vor und nach einer Installation und speichert, was neu dazukam. Beim Deinstallieren werden diese Elemente zusätzlich als Reste angeboten."/>
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <!-- Startseite -->
+            <Grid x:Name="IdlePanel">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Border x:Name="StartCard" Background="{DynamicResource Card}" CornerRadius="14" Padding="20">
+                    <StackPanel>
+                        <TextBlock Text="Neue Installation überwachen" FontWeight="SemiBold" FontSize="15"/>
+                        <TextBlock Style="{StaticResource Dim}" Margin="0,6,0,14"
+                                   Text="Erst wird ein Snapshot erstellt, dann installieren Sie das Programm. Das Erstellen dauert je nach Rechner bis zu einer Minute."/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource PrimaryButton}" Content="Installer wählen und überwachen …" Padding="24,11" Margin="0,0,12,0" Click="RunInstaller_Click"/>
+                            <Button Style="{StaticResource SecondaryButton}" Content="Nur Snapshot erstellen" Padding="24,11" Click="SnapshotOnly_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="SnapshotCard" Background="{DynamicResource AccentSoft}" CornerRadius="14" Padding="20" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock x:Name="SnapshotTitle" FontWeight="SemiBold" FontSize="15"/>
+                        <TextBlock Style="{StaticResource Dim}" Margin="0,6,0,14" Foreground="{DynamicResource Text}"
+                                   Text="Installieren Sie jetzt das Programm. Wenn die Installation vollständig abgeschlossen ist, vergleichen Sie."/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource PrimaryButton}" Content="Installation abschließen und vergleichen" Padding="24,11" Margin="0,0,12,0" Click="Compare_Click"/>
+                            <Button Style="{StaticResource SecondaryButton}" Content="Snapshot verwerfen" Padding="24,11" Click="Discard_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Grid.Row="1" Text="Gespeicherte Protokolle" FontWeight="SemiBold" Margin="0,22,0,10"/>
+                <ListBox x:Name="LogList" Grid.Row="2" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource Text}" FocusVisualStyle="{x:Null}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="bd" Background="{DynamicResource Card}" CornerRadius="10" Margin="0,0,0,6" Padding="14,10" BorderThickness="1" BorderBrush="Transparent">
+                                            <ContentPresenter/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}"/>
+                                <TextBlock Text="{Binding Sub}" Style="{StaticResource Dim}" FontSize="12" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock x:Name="NoLogs" Grid.Row="2" Text="Noch keine Protokolle." Style="{StaticResource Dim}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <Button x:Name="DeleteLogBtn" Grid.Row="3" Style="{StaticResource SecondaryButton}" Content="Ausgewähltes Protokoll löschen" Padding="22,9"
+                        HorizontalAlignment="Left" Margin="0,10,0,0" Click="DeleteLog_Click"/>
+            </Grid>
+
+            <!-- Arbeitet -->
+            <StackPanel x:Name="BusyPanel" Visibility="Collapsed" VerticalAlignment="Center">
+                <TextBlock x:Name="BusyTitle" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                <TextBlock x:Name="BusyText" Style="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,10,0,0" TextTrimming="CharacterEllipsis" MaxWidth="700"/>
+            </StackPanel>
+
+            <!-- Ergebnis -->
+            <Grid x:Name="ResultPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Name der Software" Margin="0,0,0,6"/>
+                    <TextBox x:Name="NameBox" Style="{StaticResource FieldTextBox}"/>
+                </StackPanel>
+                <TextBlock x:Name="Summary" Grid.Row="1" Style="{StaticResource Dim}" Margin="0,12,0,10"/>
+                <ListBox x:Name="ResultList" Grid.Row="2" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource Text}" FocusVisualStyle="{x:Null}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border Background="{DynamicResource Card}" CornerRadius="10" Margin="0,0,0,6" Padding="12,8">
+                                            <ContentPresenter/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="30"/>
+                                    <ColumnDefinition Width="92"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}" VerticalAlignment="Center"/>
+                                <Border Grid.Column="1" CornerRadius="9" Background="{DynamicResource AccentSoft}" Padding="8,2" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Category}" FontSize="11" Foreground="{DynamicResource Accent}"/>
+                                </Border>
+                                <TextBlock Grid.Column="2" Text="{Binding Display}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Display}" VerticalAlignment="Center"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                    <Button Style="{StaticResource SecondaryButton}" Content="Verwerfen" Width="150" Margin="0,0,12,0" Click="DiscardResult_Click"/>
+                    <Button Style="{StaticResource PrimaryButton}" Content="Protokoll speichern" Width="200" Click="Save_Click"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <Grid Grid.Row="2" Margin="0,14,0,0">
+            <TextBlock x:Name="Status" Style="{StaticResource Dim}" VerticalAlignment="Center" HorizontalAlignment="Left" MaxWidth="560" TextTrimming="CharacterEllipsis"/>
+            <Button Style="{StaticResource SecondaryButton}" Content="Schließen" Width="140" HorizontalAlignment="Right" Click="Close_Click"/>
+        </Grid>
+    </Grid>
+</local:DialogWindow>
