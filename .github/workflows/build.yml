@@ -1,40 +1,28 @@
-name: Build ModernUninstaller
+name: Build ModernUninstaller (eigener Server)
 
+# Bewusst keine pull_request-Builds: Fremder Code darf nicht auf dem
+# eigenen, dauerhaft betriebenen Self-hosted Runner ausgefuehrt werden.
 on:
+  push:
+    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       target:
-        description: 'preflight = kompilieren; linux-cross = eigener Linux-Server; windows-release = nativer Windows-Build; all = beides'
-        required: true
+        description: 'preflight = nur kompilieren; build = Windows x64 + ARM64 erzeugen'
         type: choice
-        default: linux-cross
+        required: true
+        default: build
         options:
           - preflight
-          - linux-cross
-          - windows-release
-          - all
-      linux_runner:
-        description: 'Linux: server = eigener Runner mit Label modernuninstaller, github = GitHub Ubuntu'
-        required: true
-        type: choice
-        default: server
-        options:
-          - server
-          - github
-      windows_runner:
-        description: 'Windows-Release: github = GitHub Windows, server = eigener Windows-Runner mit Label modernuninstaller'
-        required: true
-        type: choice
-        default: github
-        options:
-          - github
-          - server
+          - build
 
+# Nur der Release-Job erhaelt Schreibrechte.
 permissions:
   contents: read
 
 concurrency:
-  group: modernuninstaller-build-${{ github.ref }}
+  group: modernuninstaller-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -42,138 +30,122 @@ env:
   DOTNET_NOLOGO: '1'
 
 jobs:
-  preflight:
-    name: Preflight (.NET 9 / WPF, nur Kompilierung)
-    if: ${{ inputs.target == 'preflight' }}
-    runs-on: ${{ inputs.linux_runner == 'server' && fromJSON('["self-hosted","linux","modernuninstaller"]') || 'ubuntu-latest' }}
-    timeout-minutes: 20
+  build:
+    name: Cross-Build auf eigenem Linux-Server
+    # Der Runner muss im Repository (oder auf Org-Ebene mit Zugriff auf
+    # dieses Repo) online sein. Kein GitHub-gehosteter Windows-Runner.
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 50
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-      - name: Writable .NET SDK directory (reuse on own server)
-        shell: bash
-        run: echo "DOTNET_INSTALL_DIR=$HOME/.dotnet" >> "$GITHUB_ENV"
-      - name: Setup .NET 9 SDK
-        uses: actions/setup-dotnet@v6
+      - name: Quellcode holen
+        uses: actions/checkout@v4
+
+      - name: .NET 9 SDK bereitstellen
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
-          check-latest: false
-          skip-lts-prepass: true
-      - name: Restore (Windows Targeting unter Linux aktivieren)
+
+      - name: Server und SDK anzeigen
+        shell: bash
+        run: |
+          uname -a
+          dotnet --info
+
+      - name: Windows-Referenzpakete wiederherstellen
+        shell: bash
         run: dotnet restore ModernUninstaller.sln -p:EnableWindowsTargeting=true
-      - name: Build ohne Tests (WPF kann auf Linux nicht ausgefuehrt werden)
+
+      - name: Preflight - WPF-Projekt kompilieren
+        shell: bash
         run: dotnet build ModernUninstaller.sln -c Release --no-restore -p:EnableWindowsTargeting=true
 
-  linux-cross:
-    name: Eigener Linux-Server / Windows EXEs (Cross-Build)
-    if: ${{ inputs.target == 'linux-cross' || inputs.target == 'all' }}
-    runs-on: ${{ inputs.linux_runner == 'server' && fromJSON('["self-hosted","linux","modernuninstaller"]') || 'ubuntu-latest' }}
-    timeout-minutes: 45
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-      - name: Writable .NET SDK directory (reuse on own server)
+      # WPF-Tests koennen auf Linux nicht ausgefuehrt werden.
+      # Auf dem Linux-Runner findet nur die Kompilierung statt.
+      - name: Windows x64 und ARM64 als Einzeldatei bauen
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'build' }}
         shell: bash
-        run: echo "DOTNET_INSTALL_DIR=$HOME/.dotnet" >> "$GITHUB_ENV"
-      - name: Setup .NET 9 SDK
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '9.0.x'
-          check-latest: false
-          skip-lts-prepass: true
-      - name: Cross-Build x64 und ARM64
-        run: bash scripts/build-linux.sh
-      - name: PE-Architektur pruefen
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for rid in win-x64 win-arm64; do
+            echo "=== Build fuer $rid ==="
+            dotnet publish src/ModernUninstaller/ModernUninstaller.csproj \
+              -c Release \
+              -r "$rid" \
+              --self-contained true \
+              -p:EnableWindowsTargeting=true \
+              -p:PublishSingleFile=true \
+              -p:IncludeNativeLibrariesForSelfExtract=true \
+              -p:EnableCompressionInSingleFile=true \
+              -p:PublishTrimmed=false \
+              -o "dist/$rid"
+
+            test -s "dist/$rid/ModernUninstaller.exe"
+            cp "dist/$rid/ModernUninstaller.exe" "dist/ModernUninstaller-$rid.exe"
+          done
+          (cd dist && sha256sum ModernUninstaller-win-*.exe > SHA256SUMS)
+
+      - name: Windows-EXE-Architekturen kontrollieren
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'build' }}
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          for rid, expected in [('win-x64', 0x8664), ('win-arm64', 0xAA64)]:
-              path = Path('dist/linux-cross') / f'ModernUninstaller-{rid}.exe'
-              data = path.read_bytes()
-              assert data[:2] == b'MZ', f'{path}: kein Windows-PE'
-              pe = int.from_bytes(data[0x3C:0x40], 'little')
-              actual = int.from_bytes(data[pe + 4:pe + 6], 'little')
-              assert actual == expected, f'{path}: PE machine 0x{actual:04X} statt 0x{expected:04X}'
-              print(f'{path}: PE machine 0x{actual:04X} OK')
+          for rid, expected in (("win-x64", 0x8664), ("win-arm64", 0xAA64)):
+              path = Path("dist") / f"ModernUninstaller-{rid}.exe"
+              content = path.read_bytes()
+              if content[:2] != b"MZ":
+                  raise SystemExit(f"{path}: keine Windows-EXE")
+              pe = int.from_bytes(content[0x3C:0x40], "little")
+              actual = int.from_bytes(content[pe + 4:pe + 6], "little")
+              if actual != expected:
+                  raise SystemExit(f"{path}: falsche Architektur (0x{actual:04X})")
+              subsystem = int.from_bytes(content[pe + 24 + 68:pe + 24 + 70], "little")
+              print(f"{path}: Architektur OK; PE-Subsystem={subsystem}")
+              if subsystem != 2:
+                  print("HINWEIS: Linux-Crossbuild kann ein Konsolenfenster zeigen; finalen Windows-Release unter Windows bauen.")
           PY
-      - name: Hinweis zum Linux-Cross-Build
+
+      - name: EXE-Dateien und SHA256 hochladen
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'build' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ModernUninstaller-Windows
+          path: |
+            dist/ModernUninstaller-win-x64.exe
+            dist/ModernUninstaller-win-arm64.exe
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Hinweis zu Cross-Builds
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'build' }}
         shell: bash
         run: |
-          echo '### Linux Cross-Build' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Diese EXEs sind nicht unter Windows getestet. Der Linux-Build kann Windows-GUI-Subsystem und eingebettetes EXE-Icon verlieren. Fuer finale Releases windows-release verwenden.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Windows x64 (Cross-Build)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ModernUninstaller-cross-win-x64
-          path: dist/linux-cross/ModernUninstaller-win-x64.exe
-          if-no-files-found: error
-          retention-days: 14
-      - name: Windows ARM64 (Cross-Build)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ModernUninstaller-cross-win-arm64
-          path: dist/linux-cross/ModernUninstaller-win-arm64.exe
-          if-no-files-found: error
-          retention-days: 14
-      - name: SHA-256 (Cross-Build)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ModernUninstaller-cross-SHA256
-          path: dist/linux-cross/SHA256SUMS
-          if-no-files-found: error
-          retention-days: 14
+          echo '### ModernUninstaller - Linux Cross-Build' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Windows x64/ARM64 wurden auf dem eigenen Linux-Runner gebaut. WPF-Tests wurden nicht ausgefuehrt. Eingebettetes EXE-Icon und Windows-GUI-Subsystem koennen fehlen; vor Verteilung auf Windows testen.' >> "$GITHUB_STEP_SUMMARY"
 
-  windows-release:
-    name: Nativer Windows-Release x64 und ARM64 (inkl. Tests)
-    if: ${{ inputs.target == 'windows-release' || inputs.target == 'all' }}
-    runs-on: ${{ inputs.windows_runner == 'server' && fromJSON('["self-hosted","windows","modernuninstaller"]') || 'windows-latest' }}
-    timeout-minutes: 50
+  release:
+    name: Release bei v*-Tag
+    needs: build
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    permissions:
+      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-      - name: Setup .NET 9 SDK
-        uses: actions/setup-dotnet@v6
+      - name: Build-Artefakte herunterladen
+        uses: actions/download-artifact@v4
         with:
-          dotnet-version: '9.0.x'
-          check-latest: false
-      - name: Tests und Release-Build x64 / ARM64
-        shell: pwsh
-        run: ./scripts/build-windows.ps1
-      - name: EXE-Architektur und GUI-Subsystem pruefen
-        shell: pwsh
-        run: |
-          $expected = @{ 'win-x64' = 0x8664; 'win-arm64' = 0xAA64 }
-          foreach ($rid in $expected.Keys) {
-            $path = "dist/windows-release/ModernUninstaller-$rid.exe"
-            if (-not (Test-Path $path)) { throw "Datei fehlt: $path" }
-            $data = [IO.File]::ReadAllBytes((Resolve-Path $path))
-            if ($data[0] -ne 0x4D -or $data[1] -ne 0x5A) { throw "Kein Windows-PE: $path" }
-            $pe = [BitConverter]::ToInt32($data, 0x3C)
-            $machine = [BitConverter]::ToUInt16($data, $pe + 4)
-            $subsystem = [BitConverter]::ToUInt16($data, $pe + 24 + 68)
-            if ($machine -ne $expected[$rid]) { throw "Falsche Architektur: $path (0x$('{0:X4}' -f $machine))" }
-            if ($subsystem -ne 2) { throw "Kein GUI-Subsystem: $path ($subsystem)" }
-            Write-Host "$rid : Architektur OK, GUI-Subsystem OK"
-          }
-      - name: Windows x64 (Release)
-        uses: actions/upload-artifact@v4
+          name: ModernUninstaller-Windows
+          path: dist
+
+      - name: GitHub-Release erstellen und EXEs anhaengen
+        uses: softprops/action-gh-release@v2
         with:
-          name: ModernUninstaller-release-win-x64
-          path: dist/windows-release/ModernUninstaller-win-x64.exe
-          if-no-files-found: error
-          retention-days: 30
-      - name: Windows ARM64 (Release)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ModernUninstaller-release-win-arm64
-          path: dist/windows-release/ModernUninstaller-win-arm64.exe
-          if-no-files-found: error
-          retention-days: 30
-      - name: SHA-256 (Release)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ModernUninstaller-release-SHA256
-          path: dist/windows-release/SHA256SUMS.txt
-          if-no-files-found: error
-          retention-days: 30
+          generate_release_notes: true
+          files: |
+            dist/ModernUninstaller-win-x64.exe
+            dist/ModernUninstaller-win-arm64.exe
+            dist/SHA256SUMS
