@@ -31,43 +31,82 @@ public static class UninstallEngine
     /// <param name="prompt">Rückfrage bei Unsicherheit; null = unsichere Fenster dem Benutzer überlassen.</param>
     public static async Task<UninstallOutcome> RunOriginalAsync(ProgramItem p, bool assist, AssistPrompt? prompt, IProgress<string>? log, CancellationToken ct)
     {
-        if (OfficeC2R.IsC2R(p)) return await RunOfficeAsync(p, log, ct);
+        if (OfficeC2R.IsC2R(p)) return await RunOfficeAsync(p, silent: true, log, ct);
 
         var cmd = !string.IsNullOrEmpty(p.QuietUninstallString) && assist ? p.QuietUninstallString : p.UninstallString;
         cmd = FixMsi(cmd);
+        return await RunCommandAsync(p, cmd, runAs: false, assist, prompt, log, ct);
+    }
+
+    /// <summary>
+    /// Startet einen Deinstallationsbefehl, holt dessen Fenster nach vorne, zeigt den Zustand an und wartet,
+    /// bis der ganze Prozessbaum fertig ist (viele Uninstaller kopieren sich nach %TEMP% und beenden den Starter sofort).
+    /// </summary>
+    static async Task<UninstallOutcome> RunCommandAsync(ProgramItem p, string cmd, bool runAs, bool assist, AssistPrompt? prompt, IProgress<string>? log, CancellationToken ct)
+    {
         var (file, args) = Split(cmd);
         if (string.IsNullOrEmpty(file)) return new UninstallOutcome(false, false, "Kein Deinstallationsbefehl hinterlegt.");
 
+        UninstallLog.Write($"[{p.Name}] Start: \"{file}\" {args}" + (runAs ? "  (als Administrator)" : ""));
         log?.Report("Starte Original-Deinstallation …");
         Process? proc;
         try
         {
-            proc = Process.Start(new ProcessStartInfo(file, args) { UseShellExecute = true });
+            Native.AllowSetForegroundWindow(Native.ASFW_ANY);   // gestartetes Programm darf sein Fenster in den Vordergrund bringen
+            var psi = new ProcessStartInfo(file, args) { UseShellExecute = true };
+            if (runAs && !Native.IsElevated()) psi.Verb = "runas";
+            proc = Process.Start(psi);
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            UninstallLog.Write($"[{p.Name}] Administratorfreigabe abgelehnt.");
+            return new UninstallOutcome(false, false, "Die Administratorfreigabe (UAC) wurde abgelehnt.");
         }
         catch (Exception ex)
         {
-            return new UninstallOutcome(false, false, ex.Message);
+            UninstallLog.Write($"[{p.Name}] Startfehler: {ex.Message}");
+            return new UninstallOutcome(false, false, ex.Message + "\n\nBefehl: " + cmd);
         }
         if (proc == null) return new UninstallOutcome(false, false, "Prozess konnte nicht gestartet werden.");
 
+        int? exitCode = null;
         using (proc)
         {
             var rootPid = proc.Id;
+            UninstallLog.Write($"[{p.Name}] PID {rootPid}");
             using var stopAssist = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var assistant = assist ? Task.Run(() => AssistLoop(rootPid, prompt, log, stopAssist.Token), stopAssist.Token) : Task.CompletedTask;
+            var fronted = new HashSet<IntPtr>();
+            bool sawWindow = false;
             try
             {
-                await proc.WaitForExitAsync(ct);
-                // Viele Uninstaller kopieren sich nach %TEMP% und beenden den Starter sofort.
-                // Deshalb auf den ganzen Prozessbaum warten (ohne Browser für Umfragen), höchstens 30 Minuten.
                 var started = DateTime.UtcNow;
                 DateTime? goneAt = null;
                 while (!ct.IsCancellationRequested && DateTime.UtcNow - started < TimeSpan.FromMinutes(30))
                 {
-                    if (Native.LiveTree(rootPid).Count == 0) break;
+                    var live = Native.LiveTree(rootPid);
+                    if (Exited(proc) && exitCode == null)
+                    {
+                        try { exitCode = proc.ExitCode; } catch { exitCode = -1; }
+                        UninstallLog.Write($"[{p.Name}] Starter beendet, Code {exitCode}, weitere Prozesse: {live.Count}");
+                    }
+                    if (live.Count == 0) break;
+
+                    // Neue Fenster des Uninstallers nach vorne holen, damit sie nicht hinter unserem Dialog verschwinden.
+                    var wins = Native.VisibleWindowsOf(live);
+                    foreach (var h in wins)
+                        if (fronted.Add(h)) { Native.BringToFront(h); sawWindow = true; }
+
+                    var el = DateTime.UtcNow - started;
+                    var time = $"{(int)el.TotalMinutes}:{el.Seconds:00}";
+                    if (wins.Count > 0) log?.Report($"Original-Uninstaller läuft ({time}) – bitte dessen Fenster beantworten.");
+                    else if (el > TimeSpan.FromSeconds(10))
+                        log?.Report($"Uninstaller läuft ({time}), zeigt aber kein Fenster. Prüfen Sie die Taskleiste auf eine Administrator-Abfrage (UAC) oder ein verstecktes Fenster.");
+
                     if (KeyGone(p)) { goneAt ??= DateTime.UtcNow; if (DateTime.UtcNow - goneAt > TimeSpan.FromSeconds(60)) break; }
                     await Task.Delay(700, ct);
                 }
+                if (exitCode == null && Exited(proc)) { try { exitCode = proc.ExitCode; } catch { } }
                 var deadline = DateTime.UtcNow.AddSeconds(20);
                 while (DateTime.UtcNow < deadline && !ct.IsCancellationRequested)
                 {
@@ -78,37 +117,83 @@ public static class UninstallEngine
             catch (OperationCanceledException) { }
             stopAssist.Cancel();
             await Task.WhenAny(assistant, Task.Delay(1500));
+            UninstallLog.Write($"[{p.Name}] Ende: Fenster gesehen={sawWindow}, Code={exitCode?.ToString() ?? "?"}, Eintrag entfernt={KeyGone(p)}");
         }
-        return new UninstallOutcome(true, KeyGone(p), "");
+        var gone = KeyGone(p);
+        var msg = gone ? "" : exitCode is int c && c != 0 ? $"Der Uninstaller hat mit Code {c} beendet." : "";
+        return new UninstallOutcome(true, gone, msg);
     }
 
-    /// <summary>Office Click-to-Run ohne Fenster entfernen und warten, bis der Eintrag verschwunden ist.</summary>
-    static async Task<UninstallOutcome> RunOfficeAsync(ProgramItem p, IProgress<string>? log, CancellationToken ct)
+    /// <summary>
+    /// Office Click-to-Run. <paramref name="silent"/>: ohne Fenster (DisplayLevel=False), sonst mit Office-eigenem Dialog.
+    /// Office braucht Administratorrechte; ohne sie bricht der stille Modus lautlos ab, daher wird immer per UAC gestartet.
+    /// </summary>
+    public static async Task<UninstallOutcome> RunOfficeAsync(ProgramItem p, bool silent, IProgress<string>? log, CancellationToken ct)
     {
-        var (file, args) = Split(OfficeC2R.SilentCommand(p.UninstallString));
+        var cmd = silent ? OfficeC2R.SilentCommand(p.UninstallString) : p.UninstallString;
+        if (!silent) return await RunCommandAsync(p, cmd, runAs: true, assist: false, prompt: null, log, ct);
+
+        var (file, args) = Split(cmd);
+        UninstallLog.Write($"[{p.Name}] Office still: \"{file}\" {args}");
         log?.Report($"Office entfernt „{p.Name}“ im Hintergrund …");
+        Process? proc;
         try
         {
-            using var proc = Process.Start(new ProcessStartInfo(file, args) { UseShellExecute = true });
+            var psi = new ProcessStartInfo(file, args) { UseShellExecute = true };
+            if (!Native.IsElevated()) psi.Verb = "runas";
+            proc = Process.Start(psi);
             if (proc == null) return new UninstallOutcome(false, false, "OfficeClickToRun.exe konnte nicht gestartet werden.");
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            return new UninstallOutcome(false, false, "Die Administratorfreigabe (UAC) wurde abgelehnt. Office lässt sich nur mit Administratorrechten entfernen.");
         }
         catch (Exception ex) { return new UninstallOutcome(false, false, ex.Message); }
 
-        // Die eigentliche Arbeit macht der Click-to-Run-Dienst; der Starter endet oft sofort.
+        int? exitCode = null;
         var started = DateTime.UtcNow;
+        DateTime lastBusy = DateTime.UtcNow;
+        using (proc)
+        {
+            try
+            {
+                while (!ct.IsCancellationRequested && DateTime.UtcNow - started < TimeSpan.FromMinutes(20))
+                {
+                    if (KeyGone(p)) break;
+                    if (Exited(proc) && exitCode == null)
+                    {
+                        try { exitCode = proc.ExitCode; } catch { exitCode = -1; }
+                        UninstallLog.Write($"[{p.Name}] OfficeClickToRun beendet, Code {exitCode}");
+                    }
+                    if (!Exited(proc) || OfficeBusy()) lastBusy = DateTime.UtcNow;
+                    // Arbeitet Office seit 90 s nicht mehr und der Eintrag ist noch da, ist es fehlgeschlagen.
+                    if (DateTime.UtcNow - lastBusy > TimeSpan.FromSeconds(90)) break;
+                    var el = DateTime.UtcNow - started;
+                    log?.Report($"Office entfernt „{p.Name}“ im Hintergrund … {(int)el.TotalMinutes}:{el.Seconds:00}");
+                    await Task.Delay(1000, ct);
+                }
+            }
+            catch (OperationCanceledException) { }
+        }
+        var gone = KeyGone(p);
+        UninstallLog.Write($"[{p.Name}] Office still Ende: Code={exitCode?.ToString() ?? "?"}, Eintrag entfernt={gone}");
+        return new UninstallOutcome(true, gone, gone ? "" : $"Office hat das Sprachpaket im Hintergrund nicht entfernt (Code {exitCode?.ToString() ?? "unbekannt"}).");
+    }
+
+    static bool Exited(Process proc)
+    {
+        try { return proc.HasExited; } catch { return false; }   // z. B. Zugriff verweigert bei erhöhtem Prozess
+    }
+
+    /// <summary>Läuft gerade ein Office-Auftrag? (Der Click-to-Run-Dienst selbst läuft immer, daher zählt erst ein zweiter Prozess.)</summary>
+    static bool OfficeBusy()
+    {
         try
         {
-            while (!ct.IsCancellationRequested && DateTime.UtcNow - started < TimeSpan.FromMinutes(20))
-            {
-                if (KeyGone(p)) break;
-                var el = DateTime.UtcNow - started;
-                log?.Report($"Office entfernt „{p.Name}“ im Hintergrund … {(int)el.TotalMinutes}:{el.Seconds:00}");
-                await Task.Delay(1000, ct);
-            }
+            if (Process.GetProcessesByName("OfficeC2RClient").Length > 0) return true;
+            return Process.GetProcessesByName("OfficeClickToRun").Length > 1;
         }
-        catch (OperationCanceledException) { }
-        var gone = KeyGone(p);
-        return new UninstallOutcome(true, gone, gone ? "" : "Office hat den Eintrag (noch) nicht entfernt.");
+        catch { return false; }
     }
 
     /// <summary>Prozesse, deren EXE im Installationsordner liegt (laufende Programme blockieren sonst Dateien).</summary>

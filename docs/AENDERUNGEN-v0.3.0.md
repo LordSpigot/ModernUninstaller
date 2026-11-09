@@ -20,3 +20,10 @@
 
 ## Hinweis
 Diese Version wurde ohne Windows-Build erstellt. Bitte `dotnet test` laufen lassen; die neuen Tests stehen in `tests/ModernUninstaller.Tests/DialogAssistantTests.cs`.
+
+## v0.3.1 – „Es passiert nichts“ beim Deinstallieren
+- Office Click-to-Run wird jetzt immer mit Administratorfreigabe (UAC) gestartet. Ohne Adminrechte brach der stille Modus lautlos ab und die App wartete bis zu 20 Minuten.
+- Office-Fortschritt: erkennt, wenn Office nicht mehr arbeitet (90 s ohne Office-Prozess) und bricht dann mit Meldung und Exit-Code ab, statt weiterzuwarten. Danach wird angeboten, den Office-eigenen Dialog zu öffnen.
+- Fenster des Original-Uninstallers werden nach vorne geholt; vorher konnten sie hinter dem Deinstallations-Dialog liegen.
+- Statusanzeige mit Laufzeit; zeigt der Uninstaller nach 10 s kein Fenster, gibt es einen Hinweis (UAC-Abfrage in der Taskleiste?).
+- Protokoll aller Schritte (Befehl, PID, Exit-Code, Fenster gesehen, Eintrag entfernt): `%LocalAppData%\ModernUninstaller\uninstall.log`.

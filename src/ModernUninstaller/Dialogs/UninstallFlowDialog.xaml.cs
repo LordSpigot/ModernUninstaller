@@ -70,18 +70,35 @@ public partial class UninstallFlowDialog : DialogWindow
                     // Click-to-Run nimmt erst wieder Aufträge an, wenn der vorige vollständig abgeschlossen ist.
                     if (isOffice && previousWasOffice) { Step("Kurze Pause für Office …"); await Task.Delay(5000, ct); }
                     previousWasOffice = isOffice;
+                    BusyHint.Text = isOffice
+                        ? "Office arbeitet im Hintergrund, dafür erscheint kein Fenster. Bitte die Administrator-Abfrage (UAC) bestätigen."
+                        : Settings.Current.QuickUninstall
+                            ? "Der Dialog-Assistent bedient den Original-Uninstaller und fragt nach, wenn er unsicher ist."
+                            : "Bitte die Dialoge des Original-Uninstallers beantworten. Sein Fenster wird nach vorne geholt.";
                     Step(isOffice ? "Office entfernt das Sprachpaket im Hintergrund …" : "Original-Deinstallation läuft …");
                     var outcome = await UninstallEngine.RunOriginalAsync(item, Settings.Current.QuickUninstall, Settings.Current.QuickUninstall ? new AssistPrompt(AskUser) : null, new Progress<string>(Step), ct);
+                    if (isOffice && outcome.Started && !outcome.KeyGone && !ct.IsCancellationRequested)
+                    {
+                        var fb = MessageBox.Show(this, outcome.Message + "\n\nSoll stattdessen der Office-eigene Deinstallationsdialog geöffnet werden?",
+                            item.Name, MessageBoxButton.YesNo, MessageBoxImage.Question);
+                        if (fb == MessageBoxResult.Yes)
+                        {
+                            Step("Office-Deinstallationsdialog wird geöffnet …");
+                            outcome = await UninstallEngine.RunOfficeAsync(item, silent: false, new Progress<string>(Step), ct);
+                        }
+                    }
                     if (!outcome.Started)
                     {
-                        MessageBox.Show(this, "Die Deinstallation konnte nicht gestartet werden:\n" + outcome.Message, item.Name, MessageBoxButton.OK, MessageBoxImage.Warning);
+                        MessageBox.Show(this, "Die Deinstallation konnte nicht gestartet werden:\n" + outcome.Message + "\n\nProtokoll: " + UninstallLog.FilePath, item.Name, MessageBoxButton.OK, MessageBoxImage.Warning);
                         History.Add(new HistoryEntry(DateTime.Now, item.Name, item.Version, item.Publisher, "Fehlgeschlagen: " + outcome.Message, 0));
                         _done++;
                         continue;
                     }
                     if (!outcome.KeyGone)
                     {
-                        var ans = MessageBox.Show(this, "Der Eintrag des Programms ist noch vorhanden. Wurde die Deinstallation abgebrochen oder ist sie noch nicht fertig?\n\nJa = fortfahren und nach Resten suchen\nNein = dieses Programm auslassen",
+                        var ans = MessageBox.Show(this, "Der Eintrag des Programms ist noch vorhanden. Wurde die Deinstallation abgebrochen oder ist sie noch nicht fertig?" +
+                            (outcome.Message.Length > 0 ? "\n" + outcome.Message : "") +
+                            "\n\nJa = fortfahren und nach Resten suchen\nNein = dieses Programm auslassen\n\nProtokoll: " + UninstallLog.FilePath,
                             item.Name, MessageBoxButton.YesNo, MessageBoxImage.Question);
                         if (ans != MessageBoxResult.Yes)
                         {

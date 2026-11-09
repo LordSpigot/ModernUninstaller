@@ -41,6 +41,54 @@ static class Native
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szExeFile;
     }
 
+    // ---------- Fenster ----------
+
+    delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hwnd, int cmd);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(int pid);
+    public const int ASFW_ANY = -1;
+
+    /// <summary>Sichtbare Hauptfenster (ohne Besitzer) der angegebenen Prozesse.</summary>
+    public static List<IntPtr> VisibleWindowsOf(ICollection<int> pids)
+    {
+        var list = new List<IntPtr>();
+        if (pids.Count == 0) return list;
+        EnumWindows((h, _) =>
+        {
+            GetWindowThreadProcessId(h, out var pid);
+            if (pids.Contains((int)pid) && IsWindowVisible(h) && GetWindow(h, 4 /*GW_OWNER*/) == IntPtr.Zero && GetWindowTextLength(h) > 0)
+                list.Add(h);
+            return true;
+        }, IntPtr.Zero);
+        return list;
+    }
+
+    /// <summary>Holt ein fremdes Fenster nach vorne (es kann sonst hinter dem Deinstallations-Dialog verschwinden).</summary>
+    public static void BringToFront(IntPtr hwnd)
+    {
+        try
+        {
+            if (IsIconic(hwnd)) ShowWindow(hwnd, 9 /*SW_RESTORE*/);
+            BringWindowToTop(hwnd);
+            SetForegroundWindow(hwnd);
+        }
+        catch { }
+    }
+
+    public static bool IsElevated()
+    {
+        using var id = System.Security.Principal.WindowsIdentity.GetCurrent();
+        return new System.Security.Principal.WindowsPrincipal(id).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+    }
+
     static Dictionary<int, (int parent, string exe)> Snapshot()
     {
         var map = new Dictionary<int, (int, string)>();
