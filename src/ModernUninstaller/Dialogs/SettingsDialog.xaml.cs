@@ -1,5 +1,6 @@
 using System.Windows;
 using ModernUninstaller.Services;
+using ModernUninstaller.Services.Ml;
 
 namespace ModernUninstaller.Dialogs;
 
@@ -26,6 +27,22 @@ public partial class SettingsDialog : DialogWindow
         QuickCheck.IsChecked = s.QuickUninstall;
         AutoCheck.IsChecked = s.AutoRemoveLeftovers;
         RecycleCheck.IsChecked = s.LeftoversToRecycleBin;
+        ShowLearned();
+    }
+
+    void ShowLearned()
+    {
+        var n = DialogAssistant.LearnedCount;
+        LearnedText.Text = n == 0 ? "Noch keine eigenen Korrekturen gelernt." : $"{n} eigene Korrektur(en) gelernt.";
+        ForgetBtn.IsEnabled = n > 0;
+    }
+
+    void Forget_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this, "Alle gelernten Korrekturen des Dialog-Assistenten löschen? Das Startwissen bleibt erhalten.", "Dialog-Assistent",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        DialogAssistant.Forget();
+        ShowLearned();
     }
 
     void Tab_Checked(object sender, RoutedEventArgs e)

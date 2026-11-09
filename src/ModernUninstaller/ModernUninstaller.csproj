@@ -10,7 +10,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>ModernUninstaller</AssemblyName>
     <RootNamespace>ModernUninstaller</RootNamespace>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <ApplicationIcon>Assets\ModernUninstaller.ico</ApplicationIcon>
     <SatelliteResourceLanguages>de;en</SatelliteResourceLanguages>
   </PropertyGroup>
@@ -18,6 +18,11 @@
   <ItemGroup>
     <Resource Include="Assets\ModernUninstaller.png" />
     <Resource Include="Assets\ModernUninstaller.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Startwissen und Begriffsgruppen des Dialog-Assistenten -->
+    <EmbeddedResource Include="Services\Ml\*.json" LogicalName="ModernUninstaller.Ml.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

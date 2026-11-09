@@ -9,7 +9,7 @@ Ein moderner Uninstaller für Windows mit Dunkel- und Hellmodus, der Programme *
 **Deinstallieren, ohne Reste**
 1. Bestätigung mit Optionen (Wiederherstellungspunkt, Reste automatisch entfernen)
 2. Laufende Prozesse des Programms werden (nach Rückfrage) beendet
-3. Original-Uninstaller läuft (MSI wird automatisch von `/I` auf `/X` umgestellt); optional bestätigt die „Schnelldeinstallation“ dessen Rückfragen
+3. Original-Uninstaller läuft (MSI wird automatisch von `/I` auf `/X` umgestellt); optional bedient der **Dialog-Assistent** dessen Fenster (siehe unten). Microsoft-365-/Office-Sprachpakete werden ohne Fenster nacheinander entfernt
 4. Reste-Scan, Ergebnis als Auswahlliste
 5. Löschen: Papierkorb oder endgültig; gesperrte Dateien werden für den nächsten Neustart vorgemerkt
 
@@ -23,6 +23,18 @@ Ein moderner Uninstaller für Windows mit Dunkel- und Hellmodus, der Programme *
 | Zuordnungen | ProgIDs, Dateizuordnungen und Shell-Verben, deren Befehle in den Installationsordner zeigen |
 | System | Dienste und Treiber, geplante Aufgaben, COM-/DLL-Registrierungen, Typbibliotheken, Firewall-Regeln, PATH-Einträge |
 | Persönliches | Ordner in „Dokumente“ werden angezeigt, aber nie vorausgewählt |
+
+**Dialog-Assistent (v0.3, maschinelles Lernen, lokal)**
+
+Statt einer festen Liste „Ja/Weiter/OK“ liest ein kleines, lernendes Modell jedes Fenster des Original-Uninstallers (Titel, Texte, Buttons, Checkboxen, Optionsfelder) und entscheidet, was als Nächstes zu tun ist:
+
+- Es klickt sichere Fälle selbst, z. B. „Deinstallieren“, „Weiter“, „Fertig stellen“, „Nein für alle“ bei gemeinsam genutzten Dateien, „Später neu starten“, „Überspringen“ bei Umfragen, „Remove“ statt „Repair“ bei InstallShield.
+- Bei Fortschrittsfenstern wartet es.
+- Ist es unsicher, erscheint eine Rückfrage mit seinem Vorschlag. Ihre Wahl wird gespeichert (`dialog-training.jsonl`) und sofort eingelernt.
+- Feste Sicherheitsregeln gelten unabhängig vom Gelernten: nie neu starten, nie etwas ankreuzen, nie „Reparieren“, „Installieren“, „Kaufen“ oder „Senden“, Fehlermeldungen immer dem Benutzer zeigen.
+- Alles läuft offline in der EXE, ohne Zusatzpakete. Startwissen: [`seed-dialogs.json`](src/ModernUninstaller/Services/Ml/seed-dialogs.json), sprachübergreifende Begriffe: [`lexicon.json`](src/ModernUninstaller/Services/Ml/lexicon.json). `python tools/eval_dialog_model.py` prüft nach Änderungen, wie gut das Modell unbekannte Dialoge bedient.
+
+Einschalten unter *Einstellungen → Deinstallation → Dialog-Assistent*. Dort lässt sich Gelerntes auch wieder vergessen.
 
 Zusätzlich gibt es den **Installations-Monitor** (Toolbox): Er vergleicht den Rechner vor und nach einer Installation und speichert, was neu dazukam. Beim Deinstallieren dieses Programms werden diese Elemente ebenfalls als Reste angeboten (Tab „Protokolle“).
 

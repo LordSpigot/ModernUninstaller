@@ -62,7 +62,9 @@ public static class LeftoverService
         var result = new List<Leftover>();
         var names = Candidates(p);
         var loc = p.InstallLocation.TrimEnd('\\');
-        var useLoc = UsableLocation(loc);
+        // Teilt sich das Programm den Ordner mit einem anderen, noch installierten Programm (z. B. Office-Sprachpakete),
+        // gehört er nicht ihm allein und darf nicht als Rest angeboten werden.
+        var useLoc = UsableLocation(loc) && !ProgramScanner.OtherEntryUses(loc, p.RegistryPath);
 
         progress?.Report("Dateien …");
         ScanFiles(p, names, loc, useLoc, result);

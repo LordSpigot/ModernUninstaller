@@ -1,0 +1,44 @@
+<local:DialogWindow x:Class="ModernUninstaller.Dialogs.AssistDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ModernUninstaller"
+        Title="Dialog-Assistent" Width="620" SizeToContent="Height" MaxHeight="720" Topmost="True">
+    <Grid Margin="28,0,28,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Was soll in diesem Fenster passieren?" FontSize="18" FontWeight="SemiBold"/>
+        <TextBlock x:Name="ReasonText" Grid.Row="1" Style="{StaticResource Dim}" Margin="0,6,0,14"/>
+
+        <Border Grid.Row="2" Background="{DynamicResource Card}" CornerRadius="12" Padding="16,12" Margin="0,0,0,14">
+            <StackPanel>
+                <TextBlock x:Name="WindowTitle" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <TextBlock x:Name="WindowText" Style="{StaticResource Dim}" Margin="0,6,0,0" MaxHeight="150" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="3" MaxHeight="260" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="Choices"/>
+        </ScrollViewer>
+
+        <Grid Grid.Row="4" Margin="0,18,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Style="{StaticResource SecondaryButton}" Content="Assistent aus" Width="140" Click="Stop_Click"
+                    ToolTip="Für diese Deinstallation nichts mehr automatisch anklicken"/>
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <Button Style="{StaticResource SecondaryButton}" Content="Selbst bedienen" Width="150" Margin="0,0,12,0" Click="Manual_Click"
+                        ToolTip="Dieses Fenster selbst im Original-Uninstaller beantworten"/>
+                <Button x:Name="OkBtn" Style="{StaticResource PrimaryButton}" Content="Ausführen &amp; merken" Width="180" Click="Ok_Click"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</local:DialogWindow>

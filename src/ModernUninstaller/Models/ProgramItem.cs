@@ -43,7 +43,11 @@ public sealed class ProgramItem : INotifyPropertyChanged
         set { if (_isChecked == value) return; _isChecked = value; OnChanged(); }
     }
 
-    public string SizeText => SizeBytes <= 0 ? "–" : FormatSize(SizeBytes);
+    /// <summary>Name des Eintrags, dem die Größe des gemeinsamen Installationsordners zugerechnet wird (z. B. Office-Sprachpakete).</summary>
+    public string SharedWith { get; set; } = "";
+
+    public string SizeText => SharedWith.Length > 0 ? "geteilt" : SizeBytes <= 0 ? "–" : FormatSize(SizeBytes);
+    public string? SizeToolTip => SharedWith.Length > 0 ? $"Teilt sich den Ordner mit „{SharedWith}“; die Größe wird dort einmal gezählt." : null;
     public string DateText => InstallDate?.ToString("dd.MM.yyyy") ?? "–";
     public string Arch => Is64Bit ? "64 bit" : "32 bit";
 

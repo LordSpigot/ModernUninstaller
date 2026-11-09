@@ -9,7 +9,7 @@
             <TextBlock x:Name="BusyTitle" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
             <TextBlock x:Name="BusyStep" Style="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,10,0,22" TextAlignment="Center"/>
             <ProgressBar x:Name="Bar" IsIndeterminate="False" Minimum="0" Maximum="100" Width="420"/>
-            <TextBlock Text="Bitte die Dialoge des Original-Uninstallers beantworten, falls sie erscheinen." Style="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,22,0,0"/>
+            <TextBlock x:Name="BusyHint" Text="Bitte die Dialoge des Original-Uninstallers beantworten, falls sie erscheinen." Style="{StaticResource Dim}" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,22,0,0"/>
             <Button Style="{StaticResource SecondaryButton}" Content="Abbrechen" Width="160" HorizontalAlignment="Center" Margin="0,26,0,0" Click="CancelRun_Click"/>
         </StackPanel>
 

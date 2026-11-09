@@ -61,8 +61,12 @@
                 <StackPanel x:Name="PanelUninstall" Visibility="Collapsed">
                     <TextBlock Text="Deinstallation" Style="{StaticResource SectionTitle}"/>
                     <CheckBox x:Name="RestoreCheck" Content="Vor der Deinstallation einen Wiederherstellungspunkt erstellen" Margin="0,6,0,14"/>
-                    <CheckBox x:Name="QuickCheck" Content="Schnelldeinstallation: Rückfragen des Original-Uninstallers automatisch bestätigen" Margin="0,0,0,2"/>
-                    <TextBlock Text="Klickt Schaltflächen wie „Ja“, „Weiter“ oder „Deinstallieren“ im Original-Uninstaller. Funktioniert nur, wenn beide Programme mit gleichen Rechten laufen." Style="{StaticResource Dim}" FontSize="12" Margin="28,0,0,14"/>
+                    <CheckBox x:Name="QuickCheck" Content="Dialog-Assistent: Original-Uninstaller automatisch bedienen" Margin="0,0,0,2"/>
+                    <TextBlock Text="Ein lokales, lernendes Modell liest die Fenster des Original-Uninstallers und wählt die passende Antwort (z. B. „Deinstallieren“, „Nein“ bei gemeinsam genutzten Dateien, „Später neu starten“). Ist es unsicher, fragt es nach und merkt sich Ihre Wahl. Es verlässt nichts den PC. Funktioniert nur, wenn beide Programme mit gleichen Rechten laufen." Style="{StaticResource Dim}" FontSize="12" Margin="28,0,0,6"/>
+                    <StackPanel Orientation="Horizontal" Margin="28,0,0,14">
+                        <TextBlock x:Name="LearnedText" Style="{StaticResource Dim}" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <Button x:Name="ForgetBtn" Style="{StaticResource SecondaryButton}" Content="Gelerntes vergessen" Padding="12,4" Click="Forget_Click"/>
+                    </StackPanel>
                     <CheckBox x:Name="AutoCheck" Content="Dateireste automatisch entfernen (ohne Auswahlliste)" Margin="0,0,0,14"/>
                     <CheckBox x:Name="RecycleCheck" Content="Dateireste in den Papierkorb verschieben" Margin="0,0,0,0"/>
                 </StackPanel>

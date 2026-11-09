@@ -41,25 +41,51 @@ static class Native
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szExeFile;
     }
 
-    /// <summary>Alle (auch indirekten) Kindprozesse von <paramref name="root"/>, inklusive root.</summary>
-    public static HashSet<int> ProcessTree(int root)
+    static Dictionary<int, (int parent, string exe)> Snapshot()
     {
-        var parentOf = new Dictionary<int, int>();
+        var map = new Dictionary<int, (int, string)>();
         var snap = CreateToolhelp32Snapshot(2, 0);
         if (snap != IntPtr.Zero && snap != new IntPtr(-1))
         {
             var e = new PROCESSENTRY32 { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32>() };
             for (bool ok = Process32FirstW(snap, ref e); ok; ok = Process32NextW(snap, ref e))
-                parentOf[(int)e.th32ProcessID] = (int)e.th32ParentProcessID;
+                map[(int)e.th32ProcessID] = ((int)e.th32ParentProcessID, e.szExeFile ?? "");
             CloseHandle(snap);
         }
+        return map;
+    }
+
+    /// <summary>Alle (auch indirekten) Kindprozesse von <paramref name="root"/>, inklusive root.</summary>
+    public static HashSet<int> ProcessTree(int root)
+    {
         var set = new HashSet<int> { root };
+        set.UnionWith(LiveTree(root));
+        return set;
+    }
+
+    // Browser, die ein Uninstaller für eine Umfrage öffnet, zählen nicht als "Deinstallation läuft noch".
+    static readonly HashSet<string> Browsers = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "vivaldi.exe", "iexplore.exe", "msedgewebview2.exe",
+    };
+
+    /// <summary>Noch laufende Prozesse im Baum von <paramref name="root"/> (root nur, wenn er noch läuft), ohne Browser.</summary>
+    public static HashSet<int> LiveTree(int root)
+    {
+        var map = Snapshot();
+        var set = new HashSet<int>();
+        if (map.ContainsKey(root)) set.Add(root);
+        var reach = new HashSet<int> { root };
         bool grew = true;
         while (grew)
         {
             grew = false;
-            foreach (var (pid, ppid) in parentOf)
-                if (!set.Contains(pid) && set.Contains(ppid)) { set.Add(pid); grew = true; }
+            foreach (var (pid, (ppid, exe)) in map)
+            {
+                if (reach.Contains(pid) || !reach.Contains(ppid) || pid == ppid) continue;
+                reach.Add(pid); grew = true;
+                if (!Browsers.Contains(exe)) set.Add(pid);
+            }
         }
         return set;
     }

@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using ModernUninstaller.Models;
 using ModernUninstaller.Services;
+using ModernUninstaller.Services.Ml;
 
 namespace ModernUninstaller.Dialogs;
 
@@ -20,6 +21,8 @@ public partial class UninstallFlowDialog : DialogWindow
         InitializeComponent();
         _items = items; _restorePoint = restorePoint; _autoLeftovers = autoLeftovers; _skipOriginal = skipOriginal;
         BusyTitle.Text = items.Count == 1 ? items[0].Name : $"{items.Count} Programme";
+        if (Settings.Current.QuickUninstall)
+            BusyHint.Text = "Der Dialog-Assistent bedient den Original-Uninstaller und fragt nach, wenn er unsicher ist.";
         Loaded += async (_, _) => await RunAsync();
         Closed += (_, _) => _cts.Cancel();
     }
@@ -43,6 +46,16 @@ public partial class UninstallFlowDialog : DialogWindow
                 }
             }
 
+            // Office Click-to-Run: Werden alle Sprachen eines Produkts gewählt, verschwindet Office komplett.
+            var whole = await Task.Run(() => OfficeC2R.ProductsRemovedCompletely(_items));
+            if (whole.Count > 0 && !_skipOriginal)
+            {
+                var ans = MessageBox.Show(this, "Es sind alle installierten Sprachen von Microsoft 365 / Office gewählt (" + string.Join(", ", whole) + ").\n\n" +
+                    "Damit werden Word, Excel, Outlook usw. vollständig entfernt.\n\nFortfahren?", "Microsoft 365", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (ans != MessageBoxResult.Yes) { CloseDialog(false); return; }
+            }
+            bool previousWasOffice = false;
+
             foreach (var item in _items)
             {
                 ct.ThrowIfCancellationRequested();
@@ -51,10 +64,14 @@ public partial class UninstallFlowDialog : DialogWindow
                 string result = "Deinstalliert";
 
                 await StopRunningAsync(item);
+                var isOffice = OfficeC2R.IsC2R(item);
                 if (!_skipOriginal)
                 {
-                    Step("Original-Deinstallation läuft …");
-                    var outcome = await UninstallEngine.RunOriginalAsync(item, Settings.Current.QuickUninstall, new Progress<string>(Step), ct);
+                    // Click-to-Run nimmt erst wieder Aufträge an, wenn der vorige vollständig abgeschlossen ist.
+                    if (isOffice && previousWasOffice) { Step("Kurze Pause für Office …"); await Task.Delay(5000, ct); }
+                    previousWasOffice = isOffice;
+                    Step(isOffice ? "Office entfernt das Sprachpaket im Hintergrund …" : "Original-Deinstallation läuft …");
+                    var outcome = await UninstallEngine.RunOriginalAsync(item, Settings.Current.QuickUninstall, Settings.Current.QuickUninstall ? new AssistPrompt(AskUser) : null, new Progress<string>(Step), ct);
                     if (!outcome.Started)
                     {
                         MessageBox.Show(this, "Die Deinstallation konnte nicht gestartet werden:\n" + outcome.Message, item.Name, MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -73,6 +90,14 @@ public partial class UninstallFlowDialog : DialogWindow
                             continue;
                         }
                     }
+                }
+
+                // Office-Sprachpakete teilen sich alle Dateien. Solange noch ein Office-Eintrag existiert, gibt es keine eigenen Reste.
+                if (isOffice && await Task.Run(() => OfficeC2R.OthersRemain(item)))
+                {
+                    History.Add(new HistoryEntry(DateTime.Now, item.Name, item.Version, item.Publisher, result, 0));
+                    _done++;
+                    continue;
                 }
 
                 Step("Suche nach Resten (Dateien, Registry, Aufgaben, Dienste, DLLs) …");
@@ -114,6 +139,15 @@ public partial class UninstallFlowDialog : DialogWindow
         if (ans == MessageBoxResult.Yes) await Task.Run(() => UninstallEngine.KillAll(running));
         else foreach (var p in running) p.Dispose();
     }
+
+    /// <summary>Rückfrage des Dialog-Assistenten (wird aus dem Hintergrund-Thread aufgerufen und blockiert ihn).</summary>
+    AssistAnswer AskUser(DialogSnapshot window, AssistDecision decision) =>
+        Dispatcher.Invoke(() =>
+        {
+            var dlg = new AssistDialog(window, decision) { Owner = this };
+            dlg.ShowDialog();
+            return dlg.Answer;
+        });
 
     static string Trim(string s) => s.Length > 400 ? s[..400] + "…" : s;
 

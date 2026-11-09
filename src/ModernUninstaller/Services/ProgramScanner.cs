@@ -107,6 +107,7 @@ public static class ProgramScanner
         }
 
         MarkBundleware(result);
+        MarkSharedLocations(result);
         MonitorStore.MarkLogged(result);
         return result.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
@@ -163,6 +164,37 @@ public static class ProgramScanner
         };
     }
 
+    /// <summary>Verwendet ein anderer, noch installierter Uninstall-Eintrag denselben Installationsordner?</summary>
+    public static bool OtherEntryUses(string location, string exceptRegistryPath)
+    {
+        location = location.TrimEnd('\\');
+        if (location.Length < 4) return false;
+        foreach (var (hive, view, label) in new[]
+                 {
+                     (RegistryHive.LocalMachine, RegistryView.Registry64, "HKLM"), (RegistryHive.LocalMachine, RegistryView.Registry32, "HKLM"),
+                     (RegistryHive.CurrentUser, RegistryView.Registry64, "HKCU"), (RegistryHive.CurrentUser, RegistryView.Registry32, "HKCU"),
+                 })
+        {
+            try
+            {
+                using var bk = RegistryKey.OpenBaseKey(hive, view);
+                using var uk = bk.OpenSubKey(UninstallPath);
+                if (uk == null) continue;
+                foreach (var sub in uk.GetSubKeyNames())
+                {
+                    var path = $"{label}{(view == RegistryView.Registry32 ? "[32]" : "")}\\{UninstallPath}\\{sub}";
+                    if (path.Equals(exceptRegistryPath, StringComparison.OrdinalIgnoreCase)) continue;
+                    using var k = uk.OpenSubKey(sub);
+                    if (k == null || string.IsNullOrEmpty(k.GetValue("DisplayName") as string)) continue;
+                    var loc = (k.GetValue("InstallLocation") as string ?? "").Trim().Trim('"').TrimEnd('\\');
+                    if (loc.Equals(location, StringComparison.OrdinalIgnoreCase)) return true;
+                }
+            }
+            catch { }
+        }
+        return false;
+    }
+
     static string? GuessLocation(string? spec)
     {
         if (string.IsNullOrWhiteSpace(spec)) return null;
@@ -193,6 +225,23 @@ public static class ProgramScanner
         catch { return null; }
     }
 
+    /// <summary>
+    /// Mehrere Einträge mit demselben Installationsordner (z. B. 16 Office-Sprachpakete in "Microsoft Office") melden
+    /// jeweils die volle Größe. Gezählt wird sie nur beim ersten Eintrag, die anderen zeigen "geteilt".
+    /// </summary>
+    public static void MarkSharedLocations(List<ProgramItem> items)
+    {
+        foreach (var g in items.Where(i => i.Kind == ItemKind.Win32 && i.InstallLocation.Length > 3)
+                               .GroupBy(i => i.InstallLocation.TrimEnd('\\'), StringComparer.OrdinalIgnoreCase)
+                               .Where(grp => grp.Count() > 1))
+        {
+            var ordered = g.OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            var owner = ordered[0];
+            owner.SizeBytes = ordered.Max(i => i.SizeBytes);
+            foreach (var other in ordered.Skip(1)) { other.SharedWith = owner.Name; other.SizeBytes = 0; }
+        }
+    }
+
     static void MarkBundleware(List<ProgramItem> items)
     {
         foreach (var p in items)
@@ -206,7 +255,7 @@ public static class ProgramScanner
 
     public static async Task FillSizesAsync(IEnumerable<ProgramItem> items, CancellationToken ct = default)
     {
-        var pending = items.Where(i => i.Kind == ItemKind.Win32 && i.SizeBytes <= 0 &&
+        var pending = items.Where(i => i.Kind == ItemKind.Win32 && i.SizeBytes <= 0 && i.SharedWith.Length == 0 &&
                                        !string.IsNullOrWhiteSpace(i.InstallLocation))
                            .GroupBy(i => i.InstallLocation, StringComparer.OrdinalIgnoreCase)
                            .ToArray();
