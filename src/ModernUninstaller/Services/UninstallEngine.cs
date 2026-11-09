@@ -7,7 +7,11 @@ using ModernUninstaller.Services.Ml;
 
 namespace ModernUninstaller.Services;
 
-public sealed record UninstallOutcome(bool Started, bool KeyGone, string Message);
+public sealed record UninstallOutcome(bool Started, bool KeyGone, string Message, int? ExitCode = null)
+{
+    /// <summary>0xC06D007E: Prozess ist beim Start abgestürzt, weil eine DLL fehlt (Delay-Load).</summary>
+    public bool CrashedMissingDll => ExitCode == unchecked((int)0xC06D007E);
+}
 
 public enum AssistChoice { Perform, NothingToClick, Manual, StopAssistant }
 
@@ -53,7 +57,7 @@ public static class UninstallEngine
         try
         {
             Native.AllowSetForegroundWindow(Native.ASFW_ANY);   // gestartetes Programm darf sein Fenster in den Vordergrund bringen
-            var psi = new ProcessStartInfo(file, args) { UseShellExecute = true };
+            var psi = new ProcessStartInfo(file, args) { UseShellExecute = true, WorkingDirectory = SafeDir(file) };
             if (runAs && !Native.IsElevated()) psi.Verb = "runas";
             proc = Process.Start(psi);
         }
@@ -120,8 +124,8 @@ public static class UninstallEngine
             UninstallLog.Write($"[{p.Name}] Ende: Fenster gesehen={sawWindow}, Code={exitCode?.ToString() ?? "?"}, Eintrag entfernt={KeyGone(p)}");
         }
         var gone = KeyGone(p);
-        var msg = gone ? "" : exitCode is int c && c != 0 ? $"Der Uninstaller hat mit Code {c} beendet." : "";
-        return new UninstallOutcome(true, gone, msg);
+        var msg = gone ? "" : exitCode is int c && c != 0 ? $"Der Uninstaller hat mit Code {DescribeCode(c)} beendet." : "";
+        return new UninstallOutcome(true, gone, msg, exitCode);
     }
 
     /// <summary>
@@ -139,7 +143,7 @@ public static class UninstallEngine
         Process? proc;
         try
         {
-            var psi = new ProcessStartInfo(file, args) { UseShellExecute = true };
+            var psi = new ProcessStartInfo(file, args) { UseShellExecute = true, WorkingDirectory = SafeDir(file) };
             if (!Native.IsElevated()) psi.Verb = "runas";
             proc = Process.Start(psi);
             if (proc == null) return new UninstallOutcome(false, false, "OfficeClickToRun.exe konnte nicht gestartet werden.");
@@ -177,7 +181,23 @@ public static class UninstallEngine
         }
         var gone = KeyGone(p);
         UninstallLog.Write($"[{p.Name}] Office still Ende: Code={exitCode?.ToString() ?? "?"}, Eintrag entfernt={gone}");
-        return new UninstallOutcome(true, gone, gone ? "" : $"Office hat das Sprachpaket im Hintergrund nicht entfernt (Code {exitCode?.ToString() ?? "unbekannt"}).");
+        return new UninstallOutcome(true, gone, gone ? "" : $"Office hat das Sprachpaket im Hintergrund nicht entfernt (Code {(exitCode is int c ? DescribeCode(c) : "unbekannt")}).", exitCode);
+    }
+
+    /// <summary>Exit-Code lesbar machen; negative Werte sind meist NTSTATUS-Absturzcodes.</summary>
+    public static string DescribeCode(int code) => code switch
+    {
+        unchecked((int)0xC06D007E) => "0xC06D007E – Absturz beim Start, eine benötigte DLL fehlt",
+        unchecked((int)0xC0000005) => "0xC0000005 – Absturz (Zugriffsverletzung)",
+        unchecked((int)0xC0000135) => "0xC0000135 – DLL nicht gefunden",
+        < 0 => $"0x{(uint)code:X8}",
+        _ => code.ToString(),
+    };
+
+    static string SafeDir(string file)
+    {
+        try { var d = System.IO.Path.GetDirectoryName(file); return d != null && System.IO.Directory.Exists(d) ? d : ""; }
+        catch { return ""; }
     }
 
     static bool Exited(Process proc)

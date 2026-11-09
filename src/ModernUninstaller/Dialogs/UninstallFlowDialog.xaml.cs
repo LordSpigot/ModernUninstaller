@@ -55,6 +55,7 @@ public partial class UninstallFlowDialog : DialogWindow
                 if (ans != MessageBoxResult.Yes) { CloseDialog(false); return; }
             }
             bool previousWasOffice = false;
+            bool officeBroken = false;   // nach dem ersten Office-Fehlschlag die übrigen Sprachen nicht erneut versuchen
 
             foreach (var item in _items)
             {
@@ -63,8 +64,14 @@ public partial class UninstallFlowDialog : DialogWindow
                 BusyTitle.Text = item.Name;
                 string result = "Deinstalliert";
 
-                await StopRunningAsync(item);
                 var isOffice = OfficeC2R.IsC2R(item);
+                if (isOffice && officeBroken && !_skipOriginal)
+                {
+                    History.Add(new HistoryEntry(DateTime.Now, item.Name, item.Version, item.Publisher, "Übersprungen: Office-Uninstaller defekt", 0));
+                    _done++;
+                    continue;
+                }
+                await StopRunningAsync(item);
                 if (!_skipOriginal)
                 {
                     // Click-to-Run nimmt erst wieder Aufträge an, wenn der vorige vollständig abgeschlossen ist.
@@ -79,16 +86,26 @@ public partial class UninstallFlowDialog : DialogWindow
                     var outcome = await UninstallEngine.RunOriginalAsync(item, Settings.Current.QuickUninstall, Settings.Current.QuickUninstall ? new AssistPrompt(AskUser) : null, new Progress<string>(Step), ct);
                     if (isOffice && outcome.Started && !outcome.KeyGone && !ct.IsCancellationRequested)
                     {
-                        var fb = MessageBox.Show(this, outcome.Message + "\n\nSoll stattdessen der Office-eigene Deinstallationsdialog geöffnet werden?",
-                            item.Name, MessageBoxButton.YesNo, MessageBoxImage.Question);
-                        if (fb == MessageBoxResult.Yes)
+                        // Stürzt OfficeClickToRun.exe schon beim Start ab, scheitert der Office-Dialog genauso – dann gar nicht erst anbieten.
+                        if (!outcome.CrashedMissingDll &&
+                            MessageBox.Show(this, outcome.Message + "\n\nSoll stattdessen der Office-eigene Deinstallationsdialog geöffnet werden?",
+                                item.Name, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
                         {
                             Step("Office-Deinstallationsdialog wird geöffnet …");
                             outcome = await UninstallEngine.RunOfficeAsync(item, silent: false, new Progress<string>(Step), ct);
                         }
+                        if (!outcome.KeyGone)
+                        {
+                            officeBroken = true;
+                            OfficeFailed(item, outcome);
+                            History.Add(new HistoryEntry(DateTime.Now, item.Name, item.Version, item.Publisher, "Fehlgeschlagen: " + outcome.Message, 0));
+                            _done++;
+                            continue;
+                        }
                     }
                     if (!outcome.Started)
                     {
+                        if (isOffice) officeBroken = true;   // z. B. UAC abgelehnt: nicht für jede Sprache erneut fragen
                         MessageBox.Show(this, "Die Deinstallation konnte nicht gestartet werden:\n" + outcome.Message + "\n\nProtokoll: " + UninstallLog.FilePath, item.Name, MessageBoxButton.OK, MessageBoxImage.Warning);
                         History.Add(new HistoryEntry(DateTime.Now, item.Name, item.Version, item.Publisher, "Fehlgeschlagen: " + outcome.Message, 0));
                         _done++;
@@ -155,6 +172,23 @@ public partial class UninstallFlowDialog : DialogWindow
             item.Name, MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (ans == MessageBoxResult.Yes) await Task.Run(() => UninstallEngine.KillAll(running));
         else foreach (var p in running) p.Dispose();
+    }
+
+    /// <summary>Eine einzige Meldung, wenn Office sich nicht entfernen lässt; die übrigen Office-Sprachen werden übersprungen.</summary>
+    void OfficeFailed(ProgramItem item, UninstallOutcome outcome)
+    {
+        var rest = _items.Count(i => OfficeC2R.IsC2R(i)) - 1;
+        var text = "Microsoft 365 lässt sich auf diesem PC nicht entfernen.\n" + outcome.Message + "\n\n" +
+                   (outcome.CrashedMissingDll
+                       ? "Der Office-Uninstaller (OfficeClickToRun.exe) stürzt beim Start ab. Die Office-Installation ist beschädigt; daran kann Modern Uninstaller nichts ändern.\n\n"
+                       : "") +
+                   (rest > 0 ? $"Die übrigen {rest} Office-Sprachen dieser Auswahl werden übersprungen.\n\n" : "") +
+                   "Microsoft bietet dafür ein eigenes Entfernungstool an, das auch beschädigte Installationen entfernt.\nJetzt die Microsoft-Seite dazu öffnen?\n\nProtokoll: " + UninstallLog.FilePath;
+        if (MessageBox.Show(this, text, item.Name, MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://aka.ms/SaRA-officeUninstallFromPC") { UseShellExecute = true }); }
+            catch { }
+        }
     }
 
     /// <summary>Rückfrage des Dialog-Assistenten (wird aus dem Hintergrund-Thread aufgerufen und blockiert ihn).</summary>

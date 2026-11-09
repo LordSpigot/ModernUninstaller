@@ -27,3 +27,9 @@ Diese Version wurde ohne Windows-Build erstellt. Bitte `dotnet test` laufen lass
 - Fenster des Original-Uninstallers werden nach vorne geholt; vorher konnten sie hinter dem Deinstallations-Dialog liegen.
 - Statusanzeige mit Laufzeit; zeigt der Uninstaller nach 10 s kein Fenster, gibt es einen Hinweis (UAC-Abfrage in der Taskleiste?).
 - Protokoll aller Schritte (Befehl, PID, Exit-Code, Fenster gesehen, Eintrag entfernt): `%LocalAppData%\ModernUninstaller\uninstall.log`.
+
+## v0.3.2 – Office: keine Endlosschleife mehr
+- Schlägt das Entfernen eines Office-Sprachpakets fehl, werden die übrigen Office-Sprachen der Auswahl übersprungen. Es kommt eine einzige Meldung statt einer pro Sprache.
+- Exit-Codes werden lesbar angezeigt. 0xC06D007E (−1066598274) = OfficeClickToRun.exe stürzt beim Start ab, weil eine DLL fehlt. Die Office-Installation ist dann beschädigt, und der Office-Dialog wird gar nicht erst angeboten.
+- Bietet Microsofts Entfernungstool an (aka.ms/SaRA-officeUninstallFromPC).
+- Uninstaller starten im eigenen Ordner als Arbeitsverzeichnis.
